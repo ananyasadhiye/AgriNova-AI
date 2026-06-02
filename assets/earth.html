@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+
+body{
+margin:0;
+overflow:hidden;
+}
+
+canvas{
+position:fixed;
+top:0;
+left:0;
+z-index:-1;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<script>
+
+let scene = new THREE.Scene()
+
+let camera = new THREE.PerspectiveCamera(
+75,
+window.innerWidth/window.innerHeight,
+0.1,
+1000
+)
+
+let renderer = new THREE.WebGLRenderer({alpha:true})
+
+renderer.setSize(window.innerWidth,window.innerHeight)
+
+document.body.appendChild(renderer.domElement)
+
+/* EARTH */
+
+let geometry = new THREE.SphereGeometry(4,64,64)
+
+let texture = new THREE.TextureLoader().load(
+"https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg"
+)
+
+let material = new THREE.MeshStandardMaterial({map:texture})
+
+let earth = new THREE.Mesh(geometry,material)
+
+scene.add(earth)
+
+/* LIGHT */
+
+let light = new THREE.PointLight(0xffffff,2)
+
+light.position.set(5,3,5)
+
+scene.add(light)
+
+/* CROP MARKERS */
+
+let markerGeometry = new THREE.SphereGeometry(0.05,8,8)
+
+let markerMaterial = new THREE.MeshBasicMaterial({color:0x22c55e})
+
+for(let i=0;i<20;i++){
+
+let marker = new THREE.Mesh(markerGeometry,markerMaterial)
+
+marker.position.set(
+(Math.random()-0.5)*6,
+(Math.random()-0.5)*6,
+(Math.random()-0.5)*6
+)
+
+scene.add(marker)
+
+}
+
+/* CAMERA */
+
+camera.position.z=10
+
+function animate(){
+
+requestAnimationFrame(animate)
+
+earth.rotation.y += 0.002
+
+renderer.render(scene,camera)
+
+}
+
+animate()
+
+</script>
+
+</body>
+</html>
