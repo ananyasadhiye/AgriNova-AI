@@ -2,9 +2,11 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras import layers, models
+tf.config.threading.set_intra_op_parallelism_threads(2)
+tf.config.threading.set_inter_op_parallelism_threads(2)
 
-IMG_SIZE = 224
-BATCH_SIZE = 32
+IMG_SIZE = 64
+BATCH_SIZE = 8
 
 train_datagen = ImageDataGenerator(
     rescale=1./255,
@@ -29,7 +31,7 @@ val = train_datagen.flow_from_directory(
 )
 
 base_model = MobileNetV2(
-    input_shape=(224,224,3),
+    input_shape=(64, 64, 3),   # was (224,224,3)
     include_top=False,
     weights="imagenet"
 )
