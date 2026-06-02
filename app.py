@@ -1,250 +1,243 @@
 import streamlit as st
-import streamlit.components.v1 as components
-import pandas as pd
+import importlib
+import runpy
+import traceback
+from pathlib import Path
 
-from modules.price_ai import predict_price
-from modules.ai_chat import ask_ai
-from modules.weather import get_weather
-from modules.mandi import get_prices
-from modules.yield_ai import predict_yield
-from modules.disease_ai import detect_disease
-from modules.voice import speak
-from modules.crop_ai import recommend_crop
+# -------------------------------------------------------------------
+# Page config — sidebar collapsed (we use a custom top nav instead)
+# -------------------------------------------------------------------
+st.set_page_config(
+    page_title="AgriNova AI",
+    page_icon="🌿",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
+# -------------------------------------------------------------------
+# Load global CSS
+# -------------------------------------------------------------------
+css_path = Path("assets/background.css")
+if css_path.exists():
+    st.markdown(f"<style>{css_path.read_text()}</style>", unsafe_allow_html=True)
 
-st.set_page_config(page_title="AgriNova AI", layout="wide")
+st.markdown(
+    """
+    <style>
+      #MainMenu, footer, header {visibility: hidden;}
+      [data-testid="stSidebar"] {display: none;}
+      [data-testid="collapsedControl"] {display: none;}
+      .block-container {padding-top: 1.2rem; max-width: 1280px;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-# LOAD CSS
-def load_css():
-    with open("assets/background.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+# -------------------------------------------------------------------
+# Feature registry (11 modules)
+# key       -> session key
+# module    -> filename in modules/  (without .py)
+# -------------------------------------------------------------------
+FEATURES = [
+    {"key": "home",     "label": "Home",       "tag": "00", "icon": "✦", "module": None},
+    {"key": "weather",  "label": "Weather",    "tag": "01", "icon": "☁", "module": "weather"},
+    {"key": "mandi",    "label": "Mandi",      "tag": "02", "icon": "₹", "module": "mandi"},
+    {"key": "disease",  "label": "Disease",    "tag": "03", "icon": "🍃", "module": "disease_ai"},
+    {"key": "soil",     "label": "Soil AI",    "tag": "04", "icon": "◐", "module": "soil_ai"},
+    {"key": "crop",     "label": "Crop Match", "tag": "05", "icon": "✿", "module": "crop_ai"},
+    {"key": "yield",    "label": "Yield",      "tag": "06", "icon": "▲", "module": "yield_ai"},
+    {"key": "price",    "label": "Price",      "tag": "07", "icon": "$", "module": "price_ai"},
+    {"key": "voice",    "label": "Voice Out",  "tag": "08", "icon": "♪", "module": "voice"},
+    {"key": "vsearch",  "label": "Voice Ask",  "tag": "09", "icon": "◉", "module": "voice_search"},
+    {"key": "chat",     "label": "AI Chat",    "tag": "10", "icon": "✺", "module": "ai_chat"},
+    {"key": "language", "label": "Language",   "tag": "11", "icon": "✱", "module": "language"},
+]
 
-load_css()
+if "active" not in st.session_state:
+    st.session_state.active = "home"
 
-# ⭐ Shooting stars
-st.markdown("""
-<div class="stars"></div>
-""", unsafe_allow_html=True)
-
-# 🌫 Floating Orbs
-st.markdown("""
-<div class="orb" style="left:20%"></div>
-<div class="orb" style="left:60%"></div>
-<div class="orb" style="left:80%"></div>
-""", unsafe_allow_html=True)
-
-# 📊 Floating Data Icons
-st.markdown("""
-<div class="data-point" style="left:10%">📊</div>
-<div class="data-point" style="left:40%">📈</div>
-<div class="data-point" style="left:70%">📉</div>
-""", unsafe_allow_html=True)
-
-
-# 🌐 Neural Network Background
-components.html("""
-<canvas id="network"></canvas>
-
-<style>
-#network{
-position:fixed;
-top:0;
-left:0;
-width:100%;
-height:100%;
-z-index:-2;
-}
-</style>
-
-<script>
-
-const canvas=document.getElementById("network")
-const ctx=canvas.getContext("2d")
-
-canvas.width=window.innerWidth
-canvas.height=window.innerHeight
-
-let nodes=[]
-
-for(let i=0;i<60;i++){
-nodes.push({
-x:Math.random()*canvas.width,
-y:Math.random()*canvas.height,
-vx:(Math.random()-0.5),
-vy:(Math.random()-0.5)
-})
-}
-
-function draw(){
-
-ctx.clearRect(0,0,canvas.width,canvas.height)
-
-for(let i=0;i<nodes.length;i++){
-
-let n=nodes[i]
-
-n.x+=n.vx
-n.y+=n.vy
-
-if(n.x<0||n.x>canvas.width) n.vx*=-1
-if(n.y<0||n.y>canvas.height) n.vy*=-1
-
-ctx.beginPath()
-ctx.arc(n.x,n.y,2,0,Math.PI*2)
-ctx.fillStyle="#38bdf8"
-ctx.fill()
-
-for(let j=i;j<nodes.length;j++){
-
-let dx=n.x-nodes[j].x
-let dy=n.y-nodes[j].y
-let dist=Math.sqrt(dx*dx+dy*dy)
-
-if(dist<120){
-
-ctx.beginPath()
-ctx.moveTo(n.x,n.y)
-ctx.lineTo(nodes[j].x,nodes[j].y)
-ctx.strokeStyle="rgba(56,189,248,0.2)"
-ctx.stroke()
-
-}
-
-}
-
-}
-
-requestAnimationFrame(draw)
-
-}
-
-draw()
-
-</script>
-""", height=0)
-
-# 🌟 HERO TITLE
-st.markdown("""
-<div class="hero-title">AgriNova AI</div>
-<div class="hero-sub">AI Intelligence for Smart Farming</div>
-""", unsafe_allow_html=True)
-
-# 🤖 Rotating AI Ring
-components.html("""
-<style>
-
-.ai-ring{
-position:absolute;
-left:50%;
-top:120px;
-width:300px;
-height:300px;
-border-radius:50%;
-border:2px solid rgba(56,189,248,0.3);
-animation:spin 20s linear infinite;
-}
-
-@keyframes spin{
-0%{transform:translateX(-50%) rotate(0deg)}
-100%{transform:translateX(-50%) rotate(360deg)}
-}
-
-</style>
-
-<div class="ai-ring"></div>
-
-""", height=0)
-
-
-# SIDEBAR
-menu = st.sidebar.selectbox("Navigation",[
-"Dashboard",
-"Weather",
-"Mandi Prices",
-"Disease Detection",
-"Soil AI",
-"Yield Prediction",
-"Voice Assistant",
-"AI Chat"
-])
-
-
-# DASHBOARD
-if menu == "Dashboard":
-
-    col1,col2,col3,col4 = st.columns(4)
-
-    with col1:
-        st.markdown("""
-        <div class="glass-card">
-        <div class="icon">🌦</div>
-        <h3>Weather AI</h3>
+# -------------------------------------------------------------------
+# Top nav bar
+# -------------------------------------------------------------------
+st.markdown(
+    """
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">◈</div>
+        <div class="brand-text">
+          <div class="brand-name">AgriNova</div>
+          <div class="brand-sub">AI · FIELD INTELLIGENCE</div>
         </div>
-        """, unsafe_allow_html=True)
-
-    with col2:
-        st.markdown("""
-        <div class="glass-card">
-        <div class="icon">🌾</div>
-        <h3>Crop Advisor</h3>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col3:
-        st.markdown("""
-        <div class="glass-card">
-        <div class="icon">🦠</div>
-        <h3>Disease Detection</h3>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col4:
-        st.markdown("""
-        <div class="glass-card">
-        <div class="icon">📈</div>
-        <h3>Market AI</h3>
-        </div>
-        """, unsafe_allow_html=True)
-
-
-# WEATHER
-elif menu == "Weather":
-
-    city = st.text_input("Enter City")
-
-    if st.button("Get Weather"):
-
-        w = get_weather(city)
-
-        if "error" in w:
-            st.error(w["error"])
-        else:
-            st.success(f"{w['temp']}°C | {w['desc']}")
-
-
-# VOICE
-elif menu == "Voice Assistant":
-
-    st.markdown("""
-    <div class="wave">
-    <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="brand-meta">v2.0 — DARK ORGANIC</div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
-    q = st.text_input("Ask AI")
+nav_cols = st.columns(len(FEATURES))
+for i, f in enumerate(FEATURES):
+    with nav_cols[i]:
+        is_active = st.session_state.active == f["key"]
+        label = f"{f['icon']}  {f['label']}"
+        if st.button(label, key=f"nav_{f['key']}", use_container_width=True,
+                     type="primary" if is_active else "secondary"):
+            st.session_state.active = f["key"]
+            st.rerun()
 
-    if st.button("Ask"):
-        ans = ask_ai(q)
-        st.write(ans)
-        speak(ans)
+st.markdown('<div class="divider-line"></div>', unsafe_allow_html=True)
 
+# -------------------------------------------------------------------
+# Home
+# -------------------------------------------------------------------
+def render_home():
+    st.markdown(
+        """
+        <section class="hero">
+          <div class="hero-tag">SEASON 26 · KHARIF INDEX</div>
+          <h1 class="hero-title">
+            Grow <em>smarter</em>.<br/>
+            Decide <span class="accent">in seconds</span>.
+          </h1>
+          <p class="hero-sub">
+            Eleven AI tools — weather, soil, disease, market and voice — woven
+            into one quiet workspace built for working farmers.
+          </p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# CHAT
-elif menu == "AI Chat":
+    cards = [f for f in FEATURES if f["key"] != "home"]
+    rows = [cards[i:i + 4] for i in range(0, len(cards), 4)]
+    for row in rows:
+        cols = st.columns(4)
+        for c, f in zip(cols, row):
+            with c:
+                st.markdown(
+                    f"""
+                    <div class="feature-card">
+                      <div class="fc-top">
+                        <span class="fc-tag">{f['tag']}</span>
+                        <span class="fc-icon">{f['icon']}</span>
+                      </div>
+                      <div class="fc-title">{f['label']}</div>
+                      <div class="fc-desc">Open module →</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if st.button(f"Open {f['label']}", key=f"open_{f['key']}", use_container_width=True):
+                    st.session_state.active = f["key"]
+                    st.rerun()
 
-    q = st.chat_input("Ask question")
+    st.markdown(
+        """
+        <div class="stat-strip">
+          <div class="stat"><div class="stat-num">11</div><div class="stat-lab">AI MODULES</div></div>
+          <div class="stat"><div class="stat-num">24/7</div><div class="stat-lab">LIVE FORECASTS</div></div>
+          <div class="stat"><div class="stat-num">99%</div><div class="stat-lab">DISEASE ACCURACY</div></div>
+          <div class="stat"><div class="stat-num">12+</div><div class="stat-lab">LANGUAGES</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    if q:
-        st.chat_message("user").write(q)
-        ans = ask_ai(q)
-        st.chat_message("assistant").write(ans)
+# -------------------------------------------------------------------
+# Safe module loader — handles BOTH styles:
+#   (a) module exposes a run() function
+#   (b) module is a plain Streamlit script with top-level code
+# -------------------------------------------------------------------
+def load_module(module_name: str):
+    """
+    Try to import modules.<module_name>. If it has run(), call it.
+    Otherwise execute the file as a script via runpy so its top-level
+    Streamlit code renders inside the current page.
+    """
+    # 1) Try import + run()
+    try:
+        mod = importlib.import_module(f"modules.{module_name}")
+        importlib.reload(mod)  # pick up edits during dev
+        if hasattr(mod, "run") and callable(mod.run):
+            mod.run()
+            return
+    except ModuleNotFoundError as e:
+        # Only swallow if it's the module file itself missing
+        if module_name not in str(e):
+            st.error(f"Missing dependency while loading **{module_name}**: `{e}`")
+            st.caption("Install the missing package and reload.")
+            return
+        # else fall through to script-mode
+    except Exception:
+        st.error(f"Error inside module **{module_name}**:")
+        st.code(traceback.format_exc(), language="python")
+        return
+
+    # 2) Fallback: run as a script
+    script_path = Path("modules") / f"{module_name}.py"
+    if not script_path.exists():
+        st.error(f"Module file not found: `{script_path}`")
+        st.caption("Make sure the file exists inside the `modules/` folder.")
+        return
+
+    try:
+        runpy.run_path(str(script_path), run_name="__main__")
+    except Exception:
+        st.error(f"Error while running **{module_name}.py**:")
+        st.code(traceback.format_exc(), language="python")
+
+# -------------------------------------------------------------------
+# Section wrapper
+# -------------------------------------------------------------------
+def section(title, subtitle, module_name):
+    st.markdown(
+        f"""
+        <div class="section-head">
+          <div class="section-tag">MODULE</div>
+          <h2 class="section-title">{title}</h2>
+          <p class="section-sub">{subtitle}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    load_module(module_name)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# -------------------------------------------------------------------
+# Router
+# -------------------------------------------------------------------
+SUBTITLES = {
+    "weather":  "Hyper-local forecast for any city.",
+    "mandi":    "Live crop prices across markets.",
+    "disease":  "Upload a leaf — diagnose in seconds.",
+    "soil":     "N · P · K · pH · rainfall analysis.",
+    "crop":     "Best-fit crop for your field.",
+    "yield":    "Forecast your harvest output.",
+    "price":    "Tomorrow's mandi rate, today.",
+    "voice":    "Listen to AgriNova's answers.",
+    "vsearch":  "Speak your question, get a reply.",
+    "chat":     "Conversational farm advisor.",
+    "language": "Switch interface language.",
+}
+
+active = st.session_state.active
+if active == "home":
+    render_home()
+else:
+    feat = next((f for f in FEATURES if f["key"] == active), None)
+    if feat and feat["module"]:
+        section(feat["label"], SUBTITLES.get(active, ""), feat["module"])
+
+# -------------------------------------------------------------------
+# Footer
+# -------------------------------------------------------------------
+st.markdown(
+    """
+    <div class="footer">
+      <div>AGRINOVA AI · BUILT FOR THE FIELD</div>
+      <div>© 2026 · Crafted with care</div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
